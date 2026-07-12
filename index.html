@@ -26,7 +26,37 @@
 
     #app { position: relative; width: 100%; height: 100%; }
     #stage { position: absolute; inset: 0; }
-    canvas { display: block; }
+    #stage canvas { display: block; transition: filter .28s ease; }
+
+    #visionOverlay {
+      position: absolute; inset: 0; z-index: 6; pointer-events: none;
+      transition: background .28s ease, opacity .28s ease;
+    }
+    #app.vision-normal #stage canvas { filter: none; }
+    #app.vision-normal #visionOverlay { background: transparent; }
+    #app.vision-low #stage canvas { filter: blur(1.15px) contrast(.80) saturate(.72) brightness(.94); }
+    #app.vision-low #visionOverlay {
+      background:
+        radial-gradient(ellipse 72% 68% at 50% 50%, rgba(255,255,255,.02) 0 42%, rgba(7,14,22,.16) 72%, rgba(4,8,13,.48) 100%),
+        linear-gradient(115deg, rgba(255,255,255,.08), transparent 38%, rgba(255,255,255,.03));
+    }
+    #app.vision-narrow #stage canvas { filter: blur(.65px) contrast(.86) saturate(.78) brightness(.91); }
+    #app.vision-narrow #visionOverlay {
+      background: radial-gradient(ellipse 33% 42% at 50% 50%, transparent 0 42%, rgba(4,8,14,.52) 69%, rgba(1,3,6,.96) 100%);
+    }
+    #app.vision-glare #stage canvas { filter: blur(1.45px) contrast(.68) saturate(.62) brightness(1.12); }
+    #app.vision-glare #visionOverlay {
+      background:
+        radial-gradient(circle at 70% 20%, rgba(255,255,255,.44), rgba(255,255,255,.11) 16%, transparent 35%),
+        linear-gradient(100deg, rgba(255,255,255,.14), transparent 45%);
+    }
+    #visionBadge {
+      position: absolute; right: 18px; bottom: 18px; z-index: 9; pointer-events: none;
+      max-width: min(360px, calc(100vw - 36px)); padding: 9px 12px; border-radius: 12px;
+      color: #d9edf8; font-size: 10px; line-height: 1.45;
+      background: rgba(6,17,31,.78); border: 1px solid rgba(159,226,255,.18);
+      backdrop-filter: blur(10px);
+    }
 
     .glass {
       background: linear-gradient(180deg, rgba(18, 43, 67, .92), rgba(6, 17, 31, .90));
@@ -214,7 +244,7 @@
     .modal h2 span { color: var(--cyan); }
     .modal .subtitle { margin: 12px 0 0; font-size: clamp(16px, 2.5vw, 22px); color: #cfe1ed; }
     .modal .desc { margin: 20px 0 0; color: var(--muted); line-height: 1.7; font-size: 14px; }
-    .start-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
+    .start-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; }
     .feature { padding: 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.035); }
     .feature strong { display: block; font-size: 13px; }
     .feature span { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.45; }
@@ -251,6 +281,7 @@
 <body>
 <div id="app">
   <div id="stage" aria-label="3D 병원 안내 시뮬레이션"></div>
+  <div id="visionOverlay" aria-hidden="true"></div>
 
   <header id="topbar" class="glass">
     <div class="brand-row">
@@ -264,6 +295,7 @@
       <button id="scanBtn" class="btn primary">E · 다시 스캔</button>
       <button id="repeatBtn" class="btn">R · 다시 듣기</button>
       <button id="muteBtn" class="btn">M · 음성 켜짐</button>
+      <button id="visionBtn" class="btn">시야 · 저시력</button>
       <button id="resetBtn" class="btn warn">처음부터</button>
     </div>
   </header>
@@ -315,7 +347,8 @@
 
   <div id="reticle" aria-hidden="true"></div>
   <div id="scanRing" aria-hidden="true"></div>
-  <div id="controlsHint" class="glass">WASD 이동 · 마우스 드래그 시점 회전 · E 스캔 · R 다시 듣기</div>
+  <div id="controlsHint" class="glass">W/↑ 전진 · S/↓ 후진 · A/D 또는 ←/→ 이동 · 마우스 위치로 시점 회전 · E 스캔</div>
+  <div id="visionBadge">저시력 체험 효과가 3D 화면에만 적용됩니다. 실제 시각장애인의 시야는 사람마다 다르며, 이 효과는 교육용 표현입니다.</div>
 
   <section id="startOverlay" class="overlay">
     <div class="modal">
@@ -325,11 +358,13 @@
       <p class="desc">
         모든 글자를 읽는 대신, 정사각형 D-TAG가 부착된 안내판만 골라 읽습니다.
         병원 입구에서 내과 접수처까지 이동하며 일반 OCR과 TAG:ON의 정보 전달 차이를 비교해 보세요.
+        안내판은 앞면과 뒷면을 각각 구성해 어느 쪽에서 보더라도 글자가 거꾸로 보이지 않습니다.
       </p>
       <div class="start-grid">
         <div class="feature"><strong>D-TAG 선택 인식</strong><span>고대비 마커와 태그 ID가 있는 안내판만 감지합니다.</span></div>
         <div class="feature"><strong>목적지 중심 안내</strong><span>현재 미션과 관련된 방향·거리 정보를 우선 전달합니다.</span></div>
-        <div class="feature"><strong>전후 비교 기록</strong><span>이동 시간, 잘못된 이동, 불필요한 안내를 기록합니다.</span></div>
+        <div class="feature"><strong>직관적인 이동·시점</strong><span>W/↑는 전진, S/↓는 후진이며 마우스 포인터를 화면 가장자리로 옮기면 시점이 회전합니다.</span></div>
+        <div class="feature"><strong>저시력 시야 체험</strong><span>흐림·대비 저하·좁은 시야·눈부심 효과를 전환하며 정보 접근의 어려움을 비교합니다.</span></div>
       </div>
       <div class="start-actions">
         <button id="startBtn" class="btn primary">체험 시작</button>
@@ -342,7 +377,7 @@
     <div class="modal">
       <div class="kicker">MISSION COMPLETE</div>
       <h2 style="font-size:clamp(28px,5vw,48px)">내과 접수처에 도착했습니다.</h2>
-      <p class="desc">이번 체험 기록을 확인하고 다른 안내 모드로 다시 비교해 보세요.</p>
+      <p class="desc">도착 결과를 확인했습니다. 시뮬레이션을 마칠까요?</p>
       <div class="result-grid">
         <div class="result-card"><span>도착 시간</span><strong id="resultTime">00:00</strong></div>
         <div class="result-card"><span>잘못된 이동</span><strong id="resultWrong">0</strong></div>
@@ -352,8 +387,21 @@
       </div>
       <div id="resultMessage" class="result-message"></div>
       <div class="start-actions">
-        <button id="retryTagBtn" class="btn primary">TAG:ON으로 다시 체험</button>
-        <button id="retryOcrBtn" class="btn">일반 OCR로 다시 체험</button>
+        <button id="finishBtn" class="btn primary">시뮬레이션 마치기</button>
+        <button id="continueBtn" class="btn">계속 둘러보기</button>
+        <button id="retryOtherBtn" class="btn">다른 모드로 다시 체험</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="endOverlay" class="overlay hidden">
+    <div class="modal">
+      <div class="kicker">EXPERIENCE COMPLETE</div>
+      <h2 style="font-size:clamp(28px,5vw,48px)">TAG:ON 체험을 마쳤습니다.</h2>
+      <p class="desc">필요한 안내만 선택해 전달하는 방식이 이동 정보 접근에 어떤 차이를 만드는지 결과를 통해 확인했습니다.</p>
+      <div class="start-actions">
+        <button id="backToIntroBtn" class="btn primary">처음 설명 화면으로</button>
+        <button id="restartSameBtn" class="btn">같은 모드로 다시 시작</button>
       </div>
     </div>
   </section>
@@ -390,6 +438,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   const stage = $('stage');
   const miniMap = $('miniMap');
   const mapCtx = miniMap.getContext('2d');
+  const app = $('app');
 
   const state = {
     running: false,
@@ -410,9 +459,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     keys: {},
     yaw: 0,
     pitch: 0,
-    dragging: false,
-    lastPointerX: 0,
-    lastPointerY: 0,
+    pointerNX: 0,
+    pointerNY: 0,
+    pointerInside: false,
+    visionMode: 'low',
+    goalAcknowledged: false,
     scanPulseUntil: 0,
     manualScan: false,
   };
@@ -590,33 +641,51 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }, 512,512);
   }
 
+  function makeReadableDoubleFace(texture, width, height, backingColor=0x173848) {
+    const holder = new THREE.Group();
+    const backing = new THREE.Mesh(
+      new THREE.BoxGeometry(width + .10, height + .10, .075),
+      new THREE.MeshStandardMaterial({color: backingColor, roughness: .64, metalness: .10})
+    );
+    backing.castShadow = true;
+    holder.add(backing);
+
+    const geometry = new THREE.PlaneGeometry(width, height);
+    const front = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({map:texture, side:THREE.FrontSide}));
+    front.position.z = .041;
+    holder.add(front);
+
+    const back = new THREE.Mesh(geometry.clone(), new THREE.MeshBasicMaterial({map:texture, side:THREE.FrontSide}));
+    back.position.z = -.041;
+    back.rotation.y = Math.PI;
+    holder.add(back);
+
+    return {holder, front, back, backing};
+  }
+
   function addSign({id, title, subtitle, x,y,z, ry=0, tagged=false, icon='→', type='direction', relevant=false, priority=1, voice='', palette='blue', maxDistance=12, emergency=false}) {
     const group = new THREE.Group();
     group.position.set(x,y,z); group.rotation.y = ry;
 
-    const sign = new THREE.Mesh(
-      new THREE.PlaneGeometry(4.4,2.0),
-      new THREE.MeshBasicMaterial({ map: makeSignTexture(title, subtitle, palette), side: THREE.DoubleSide })
-    );
+    const signFace = makeReadableDoubleFace(makeSignTexture(title, subtitle, palette), 4.4, 2.0, 0x173848);
+    const sign = signFace.holder;
     sign.position.x = tagged ? -.55 : 0;
     group.add(sign);
 
     let tag = null;
     if (tagged) {
-      tag = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.22,1.22),
-        new THREE.MeshBasicMaterial({ map: makeTagTexture(icon,id), side: THREE.DoubleSide })
-      );
-      tag.position.set(1.75,0,.015);
+      const tagFace = makeReadableDoubleFace(makeTagTexture(icon,id), 1.22, 1.22, 0xe8eef0);
+      tag = tagFace.holder;
+      tag.position.set(1.75,0,.0);
       group.add(tag);
-      tagMeshes.push(tag);
+      tagMeshes.push(tagFace.front, tagFace.back);
     }
 
     scene.add(group);
     const data = {id,title,subtitle,group,sign,tag,tagged,type,relevant,priority,voice,palette,maxDistance,emergency,lastGlow:0};
     signs.push(data);
-    if (tag) tag.userData.sign = data;
-    sign.userData.sign = data;
+    [signFace.front, signFace.back, sign].forEach(obj=>obj.userData.sign=data);
+    if (tag) tag.traverse(obj=>{ obj.userData.sign=data; });
     return data;
   }
 
@@ -641,7 +710,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       ctx.font='900 120px sans-serif'; ctx.fillStyle=color;
       ctx.fillText(text,w/2,h/2);
     },1024,256);
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(5.5,1.4), new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide}));
+    const face = makeReadableDoubleFace(tex, 5.5, 1.4, 0xd8e2e6);
+    const p = face.holder;
     p.position.set(x,y,z); p.rotation.y=ry; scene.add(p);
   }
   addFloatingText('HOSPITAL LOBBY',0,3.45,19.65,0,'#235467');
@@ -834,6 +904,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if (state.completed) return;
     state.completed = true;
     state.running = false;
+    state.goalAcknowledged = true;
     const message = state.mode==='tag'
       ? `TAG:ON 모드에서 목적지 관련 안내를 우선 적용했습니다. 불필요한 안내는 ${state.noise}회였고, ${state.tagsSeen.size}개의 D-TAG를 확인했습니다.`
       : `일반 OCR 모드에서는 시야의 여러 문자를 함께 읽어 불필요한 안내가 ${state.noise}회 발생했습니다. TAG:ON 모드로 다시 체험해 정보 선택의 차이를 비교해보세요.`;
@@ -864,12 +935,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     state.lastGuidance = '';
     state.lastCandidateId = null;
     state.candidateSince = 0;
+    state.goalAcknowledged = false;
+    state.pointerNX = 0;
+    state.pointerNY = 0;
+    state.pointerInside = false;
     camera.position.copy(startPos);
     state.yaw = 0;
     state.pitch = 0;
     camera.rotation.set(0,0,0);
     $('log').innerHTML='';
     $('resultOverlay').classList.add('hidden');
+    $('endOverlay').classList.add('hidden');
     $('startOverlay').classList.add('hidden');
     updateModeButtons();
     updateStats();
@@ -892,10 +968,50 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     logMessage(mode==='tag'?'TAG:ON 모드로 전환했습니다.':'일반 OCR 모드로 전환했습니다.');
   }
 
+  const visionModes = [
+    {id:'low', label:'저시력', note:'흐림과 대비 저하'},
+    {id:'narrow', label:'좁은 시야', note:'주변 시야 제한'},
+    {id:'glare', label:'눈부심', note:'빛 번짐과 낮은 대비'},
+    {id:'normal', label:'일반', note:'시야 효과 없음'},
+  ];
+
+  function applyVisionMode(mode) {
+    state.visionMode = mode;
+    app.classList.remove('vision-low','vision-narrow','vision-glare','vision-normal');
+    app.classList.add(`vision-${mode}`);
+    const item = visionModes.find(v=>v.id===mode) || visionModes[0];
+    $('visionBtn').textContent = `시야 · ${item.label}`;
+    $('visionBadge').textContent = `${item.label} 효과: ${item.note}. 실제 시각장애인의 시야는 사람마다 다르며, 이 효과는 교육용 표현입니다.`;
+  }
+
+  function cycleVisionMode() {
+    const index = visionModes.findIndex(v=>v.id===state.visionMode);
+    applyVisionMode(visionModes[(index+1)%visionModes.length].id);
+  }
+
   $('startBtn').addEventListener('click',()=>resetSimulation('tag'));
   $('startOcrBtn').addEventListener('click',()=>resetSimulation('ocr'));
-  $('retryTagBtn').addEventListener('click',()=>resetSimulation('tag'));
-  $('retryOcrBtn').addEventListener('click',()=>resetSimulation('ocr'));
+  $('finishBtn').addEventListener('click',()=>{
+    $('resultOverlay').classList.add('hidden');
+    $('endOverlay').classList.remove('hidden');
+    state.running = false;
+    state.completed = true;
+  });
+  $('continueBtn').addEventListener('click',()=>{
+    $('resultOverlay').classList.add('hidden');
+    state.completed = false;
+    state.running = true;
+    state.startedAt = performance.now() - state.elapsed*1000;
+    setGuidance('자유 탐색','도착 후 병원 공간을 계속 둘러봅니다.','목적지 도착 결과는 다시 표시되지 않습니다.');
+  });
+  $('retryOtherBtn').addEventListener('click',()=>resetSimulation(state.mode==='tag'?'ocr':'tag'));
+  $('backToIntroBtn').addEventListener('click',()=>{
+    $('endOverlay').classList.add('hidden');
+    $('startOverlay').classList.remove('hidden');
+    state.running = false;
+    state.completed = false;
+  });
+  $('restartSameBtn').addEventListener('click',()=>resetSimulation(state.mode));
   $('tagModeBtn').addEventListener('click',()=>setMode('tag'));
   $('ocrModeBtn').addEventListener('click',()=>setMode('ocr'));
   $('scanBtn').addEventListener('click',()=>scanCurrentView(true));
@@ -909,9 +1025,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if(state.muted && 'speechSynthesis' in window) speechSynthesis.cancel();
   });
   $('resetBtn').addEventListener('click',()=>resetSimulation(state.mode));
+  $('visionBtn').addEventListener('click',cycleVisionMode);
 
   addEventListener('keydown',e=>{
     if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
     state.keys[e.code]=true;
     if(e.code==='KeyE') scanCurrentView(true);
     if(e.code==='KeyR') { if(state.lastGuidance) speak(state.lastGuidance); }
@@ -919,50 +1037,60 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   });
   addEventListener('keyup',e=>state.keys[e.code]=false);
 
-  renderer.domElement.addEventListener('pointerdown',e=>{
-    state.dragging=true; state.lastPointerX=e.clientX; state.lastPointerY=e.clientY;
-    renderer.domElement.setPointerCapture(e.pointerId);
+  renderer.domElement.addEventListener('pointerenter',()=>{
+    state.pointerInside = true;
   });
   renderer.domElement.addEventListener('pointermove',e=>{
-    if(!state.dragging) return;
-    const dx=e.clientX-state.lastPointerX, dy=e.clientY-state.lastPointerY;
-    state.lastPointerX=e.clientX; state.lastPointerY=e.clientY;
-    state.yaw -= dx*.0032;
-    state.pitch -= dy*.0028;
-    state.pitch = Math.max(-1.15,Math.min(1.15,state.pitch));
+    state.pointerNX = (e.clientX / Math.max(innerWidth,1)) * 2 - 1;
+    state.pointerNY = (e.clientY / Math.max(innerHeight,1)) * 2 - 1;
+    state.pointerInside = true;
   });
-  renderer.domElement.addEventListener('pointerup',e=>{
-    state.dragging=false;
-    try{renderer.domElement.releasePointerCapture(e.pointerId);}catch(_){ }
+  renderer.domElement.addEventListener('pointerleave',()=>{
+    state.pointerInside = false;
+    state.pointerNX = 0;
+    state.pointerNY = 0;
   });
+
+  function updateViewFromPointer(dt) {
+    if (!state.running || state.completed || !state.pointerInside) return;
+    const deadZone = .13;
+    const edgeX = Math.abs(state.pointerNX) <= deadZone ? 0 : Math.sign(state.pointerNX) * (Math.abs(state.pointerNX)-deadZone)/(1-deadZone);
+    const edgeY = Math.abs(state.pointerNY) <= deadZone ? 0 : Math.sign(state.pointerNY) * (Math.abs(state.pointerNY)-deadZone)/(1-deadZone);
+    state.yaw -= edgeX * 1.75 * dt;
+    state.pitch -= edgeY * 1.15 * dt;
+    state.pitch = Math.max(-1.08,Math.min(1.08,state.pitch));
+  }
 
   const clock = new THREE.Clock();
   function updateMovement(dt) {
     if(!state.running || state.completed) return;
-    const move = new THREE.Vector3();
-    if(state.keys['KeyW']||state.keys['ArrowUp']) move.z-=1;
-    if(state.keys['KeyS']||state.keys['ArrowDown']) move.z+=1;
-    if(state.keys['KeyA']||state.keys['ArrowLeft']) move.x-=1;
-    if(state.keys['KeyD']||state.keys['ArrowRight']) move.x+=1;
-    if(move.lengthSq()>0) {
-      move.normalize();
+
+    camera.rotation.y = state.yaw;
+    camera.rotation.x = state.pitch;
+
+    const forwardInput = (state.keys['KeyW']||state.keys['ArrowUp'] ? 1 : 0) - (state.keys['KeyS']||state.keys['ArrowDown'] ? 1 : 0);
+    const rightInput = (state.keys['KeyD']||state.keys['ArrowRight'] ? 1 : 0) - (state.keys['KeyA']||state.keys['ArrowLeft'] ? 1 : 0);
+
+    if(forwardInput!==0 || rightInput!==0) {
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      forward.normalize();
+      const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+      const delta = forward.multiplyScalar(forwardInput).add(right.multiplyScalar(rightInput));
+      if(delta.lengthSq()>0) delta.normalize();
+
       const speed = 4.0;
-      const sin=Math.sin(state.yaw), cos=Math.cos(state.yaw);
-      const dx = move.x*cos - move.z*sin;
-      const dz = move.x*sin + move.z*cos;
-      const next = camera.position.clone();
-      next.x += dx*speed*dt;
-      next.z += dz*speed*dt;
+      const next = camera.position.clone().addScaledVector(delta, speed*dt);
       const nextX = camera.position.clone(); nextX.x = next.x;
       if(!collides(nextX)) camera.position.x = next.x;
       const nextZ = camera.position.clone(); nextZ.z = next.z;
       if(!collides(nextZ)) camera.position.z = next.z;
     }
-    camera.rotation.y=state.yaw;
-    camera.rotation.x=state.pitch;
+
     camera.position.y=1.62;
     updateWrongZones();
-    if(camera.position.distanceTo(goalPos)<1.7) completeMission();
+    if(!state.goalAcknowledged && camera.position.distanceTo(goalPos)<1.7) completeMission();
   }
 
   function drawMiniMap() {
@@ -1024,6 +1152,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       state.elapsed=(performance.now()-state.startedAt)/1000;
       updateStats();
     }
+    updateViewFromPointer(dt);
     updateMovement(dt);
     autoScan(performance.now());
     pulseTags(performance.now());
@@ -1040,6 +1169,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   });
 
   // 첫 화면의 초기 상태
+  applyVisionMode('low');
   updateModeButtons();
   updateStats();
   drawMiniMap();
